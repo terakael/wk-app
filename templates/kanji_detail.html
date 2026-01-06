@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}{{ kanji.character }} ({{ kanji.meaning }}) - Kanji Details{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 p-6">
+        <!-- Kanji Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-6xl font-bold mb-4 text-red-600 dark:text-red-400">{{ kanji.character }}</h1>
+            <h2 class="text-2xl font-semibold">{{ kanji.meaning }}</h2>
+            <span class="inline-block bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 px-3 py-1 text-sm font-medium mt-2 border border-red-200 dark:border-red-700">
+                Level {{ kanji.level }}
+            </span>
+        </div>
+
+        <!-- Readings -->
+        {% if readings %}
+        <div class="mb-8">
+            <h3 class="text-xl font-semibold mb-3">Readings</h3>
+            <div class="space-y-4">
+                {% for reading_type, readings in readings|groupby('reading_type') %}
+                <div>
+                    <h4 class="font-medium capitalize mb-2">{{ reading_type }}'yomi</h4>
+                    <div class="flex flex-wrap gap-2">
+                        {% for reading in readings %}
+                        <span class="bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200 px-3 py-1 text-sm font-medium border border-red-200 dark:border-red-700">
+                            {{ reading.reading_text }}
+                        </span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Mnemonics -->
+        {% if mnemonics %}
+        <div class="mb-8">
+            <h3 class="text-xl font-semibold mb-3">Mnemonics</h3>
+            {% for mnemonic in mnemonics %}
+            <div class="mb-4">
+                <h4 class="font-medium capitalize mb-2">{{ mnemonic.mnemonic_type }} Mnemonic</h4>
+                <div class="bg-red-50 dark:bg-red-900/20 p-4 border border-red-200 dark:border-red-700">
+                    <div class="prose max-w-none">
+                        {{ mnemonic.content|safe }}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Radicals that make up this kanji -->
+        {% if radicals %}
+        <div class="mb-8">
+            <h3 class="text-xl font-semibold mb-4">
+                Radicals ({{ radicals|length }})
+            </h3>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {% for radical in radicals %}
+                <a href="{{ url_for('radical_detail', radical_id=radical.id) }}"
+                   class="block p-3 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-center transition-all relative border border-blue-200 dark:border-blue-700">
+                    <div class="text-3xl mb-2 text-blue-600 dark:text-blue-400">
+                        {% if radical.character %}
+                            {{ radical.character }}
+                        {% else %}
+                            <img src="{{ radical.character_image }}" alt="{{ radical.meaning }}" class="w-8 h-8 mx-auto object-contain radical-image">
+                        {% endif %}
+                    </div>
+                    <div class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ radical.meaning }}</div>
+                    <span class="absolute top-2 right-2 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 text-xs font-medium border border-blue-200 dark:border-blue-700">
+                        {{ radical.level }}
+                    </span>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Vocabulary that uses this kanji -->
+        {% if vocabulary %}
+        <div class="mb-8">
+            <h3 class="text-xl font-semibold mb-4">
+                Vocabulary using this kanji ({{ vocabulary|length }})
+            </h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {% for vocab in vocabulary %}
+                <a href="{{ url_for('vocab_detail', vocab_id=vocab.id) }}"
+                   class="block p-3 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/40 text-center transition-all relative border border-green-200 dark:border-green-700">
+                    <div class="text-2xl font-bold text-green-600 dark:text-green-400 mb-1">{{ vocab.character }}</div>
+                    <div class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ vocab.primary_meaning }}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">{{ vocab.reading }}</div>
+                    <span class="absolute top-2 right-2 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 px-2 py-1 text-xs font-medium border border-green-200 dark:border-green-700">
+                        {{ vocab.level }}
+                    </span>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Navigation -->
+        <div class="mt-8 text-center">
+            <a href="/kanji" class="bg-red-600 hover:outline hover:outline-1 hover:outline-red-400 text-white px-6 py-2 transition-all">
+                ← Back to Kanji
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

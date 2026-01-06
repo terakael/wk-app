@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}{{ radical.meaning }} - Radical Details{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 p-6">
+        <!-- Radical Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-5xl font-bold mb-4 text-blue-600 dark:text-blue-400">
+                {% if radical.character %}
+                    {{ radical.character }}
+                {% else %}
+                    <img src="{{ radical.character_image }}" alt="{{ radical.meaning }}" class="w-32 h-32 mx-auto radical-image">
+                {% endif %}
+            </h1>
+            <h2 class="text-2xl font-semibold">{{ radical.meaning }}</h2>
+            <span class="inline-block bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-3 py-1 text-sm font-medium mt-2 border border-blue-200 dark:border-blue-700">
+                Level {{ radical.level }}
+            </span>
+        </div>
+
+        <!-- Mnemonic Section -->
+        {% if radical.mnemonic %}
+        <div class="mb-8">
+            <div class="bg-blue-50 dark:bg-blue-900/20 p-4 border border-blue-200 dark:border-blue-700">
+                <div class="prose max-w-none">
+                    {{ radical.mnemonic|safe }}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Mnemonic Image -->
+        {% if radical.mnemonic_image %}
+        <div class="mb-8">
+            <div class="text-center">
+                <img src="{{ radical.mnemonic_image }}" alt="{{ radical.meaning }} mnemonic"
+                     class="max-w-sm mx-auto border border-gray-200 dark:border-gray-700">
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Kanji that use this radical -->
+        {% if kanji_list %}
+        <div class="mb-8">
+            <h3 class="text-xl font-semibold mb-4">
+                Kanji using this radical ({{ kanji_list|length }})
+            </h3>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {% for kanji in kanji_list %}
+                <a href="{{ url_for('kanji_detail', kanji_id=kanji.id) }}"
+                   class="block p-3 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 text-center transition-all relative border border-red-200 dark:border-red-700">
+                    <div class="text-3xl font-bold text-red-600 dark:text-red-400 mb-1">{{ kanji.character }}</div>
+                    <div class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ kanji.meaning }}</div>
+                    <span class="absolute top-2 right-2 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 px-2 py-1 text-xs font-medium border border-red-200 dark:border-red-700">
+                        {{ kanji.level }}
+                    </span>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Navigation -->
+        <div class="mt-8 text-center">
+            <a href="/radicals" class="bg-blue-600 hover:outline hover:outline-1 hover:outline-blue-400 text-white px-6 py-2 transition-all">
+                ← Back to Radicals
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 p-6">
+        <h1 class="text-3xl font-bold text-center mb-8">WaniKani Database</h1>
+        <p class="text-center text-gray-600 dark:text-gray-400 mb-8">Explore radicals, kanji, and vocabulary from the WaniKani curriculum</p>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-blue-50 dark:bg-blue-900/20 p-6 text-center border border-gray-200 dark:border-gray-700">
+                <h2 class="text-xl font-semibold mb-3">Radicals</h2>
+                <p class="text-gray-600 dark:text-gray-300 mb-4">Building blocks of kanji</p>
+                <a href="/radicals" class="bg-blue-600 hover:outline hover:outline-1 hover:outline-blue-400 text-white px-6 py-2 transition-all">
+                    Browse Radicals
+                </a>
+            </div>
+            
+            <div class="bg-red-50 dark:bg-red-900/20 p-6 text-center border border-gray-200 dark:border-gray-700">
+                <h2 class="text-xl font-semibold mb-3">Kanji</h2>
+                <p class="text-gray-600 dark:text-gray-300 mb-4">Japanese characters</p>
+                <a href="/kanji" class="bg-red-600 hover:outline hover:outline-1 hover:outline-red-400 text-white px-6 py-2 transition-all">
+                    Browse Kanji
+                </a>
+            </div>
+            
+            <div class="bg-green-50 dark:bg-green-900/20 p-6 text-center border border-gray-200 dark:border-gray-700">
+                <h2 class="text-xl font-semibold mb-3">Vocabulary</h2>
+                <p class="text-gray-600 dark:text-gray-300 mb-4">Japanese words</p>
+                <a href="/vocabulary" class="bg-green-600 hover:outline hover:outline-1 hover:outline-green-400 text-white px-6 py-2 transition-all">
+                    Browse Vocabulary
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

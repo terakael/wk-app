@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Radicals - WaniKani Database{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <div class="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 p-6">
+        <h1 class="text-3xl font-bold mb-6">Radicals</h1>
+        <p class="text-gray-600 dark:text-gray-400 mb-6">Click on any radical to see details and kanji that use it</p>
+        
+        <div id="radicals-container">
+            <!-- Levels will be loaded here via infinite scroll -->
+        </div>
+        
+        <div id="loading" class="text-center py-8 hidden">
+            <div class="inline-block w-8 h-8 border-4 border-gray-200 loading-spinner"></div>
+            <p class="mt-2 text-gray-600 dark:text-gray-400">Loading more radicals...</p>
+        </div>
+        
+        <div id="no-more" class="text-center py-8 hidden">
+            <p class="text-gray-500 dark:text-gray-400">All radicals loaded</p>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentLevel = 1;
+const maxLevel = {{ radicals_by_level.keys() | list | max }};
+let isLoading = false;
+const radicalsData = {{ radicals_by_level | tojson }};
+
+function loadMoreRadicals() {
+    if (isLoading || currentLevel > maxLevel) return;
+    
+    isLoading = true;
+    document.getElementById('loading').classList.remove('hidden');
+    
+    setTimeout(() => {
+        const level = currentLevel.toString();
+        const radicals = radicalsData[level];
+        
+        if (radicals) {
+            const levelDiv = document.createElement('div');
+            levelDiv.className = 'mb-8';
+            levelDiv.innerHTML = `
+                <h2 class="text-xl font-semibold mb-4 text-blue-600 dark:text-blue-400">Level ${level}</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    ${radicals.map(radical => `
+                        <a href="/radicals/${radical.id}"
+                           class="block p-4 bg-gray-50 dark:bg-gray-900 hover:bg-blue-50 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700 transition-all">
+                            <div class="text-center">
+                                <div class="text-4xl mb-2 text-blue-600 dark:text-blue-400">
+                                    ${radical.character 
+                                        ? radical.character 
+                                        : `<img src="${radical.character_image}" alt="${radical.meaning}" class="w-12 h-12 mx-auto object-contain radical-image">`}
+                                </div>
+                                <div class="font-medium text-gray-800 dark:text-gray-200">${radical.meaning}</div>
+                            </div>
+                        </a>
+                    `).join('')}
+                </div>
+            `;
+            
+            document.getElementById('radicals-container').appendChild(levelDiv);
+        }
+        
+        currentLevel++;
+        isLoading = false;
+        document.getElementById('loading').classList.add('hidden');
+        
+        if (currentLevel > maxLevel) {
+            document.getElementById('no-more').classList.remove('hidden');
+        }
+    }, 300);
+}
+
+// Initial load
+loadMoreRadicals();
+
+// Infinite scroll
+window.addEventListener('scroll', () => {
+    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 1000) {
+        loadMoreRadicals();
+    }
+});
+</script>
+{% endblock %}

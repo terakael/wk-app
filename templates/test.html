@@ -1,0 +1,444 @@
+{% extends "base.html" %}
+
+{% block title %}Knowledge Test - WaniKani Database{% endblock %}
+
+{% block head %}
+<script src="{{ url_for('static', filename='wanakana.min.js') }}"></script>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <!-- Progress Bar -->
+    <div class="mb-8">
+        <div class="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+            <span>Progress</span>
+            <span id="progress-text">0 / 0</span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+            <div id="progress-bar" class="h-2 rounded-full transition-all duration-300 bg-blue-600 dark:bg-blue-500" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <!-- Test Area -->
+    <div id="test-container" class="min-h-[400px]">
+        <!-- Loading State -->
+        <div id="loading" class="text-center py-20">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-500"></div>
+            <p class="mt-4 text-gray-600 dark:text-gray-400">Loading test data...</p>
+        </div>
+
+        <!-- Test Item (initially hidden) -->
+        <div id="test-item" class="hidden">
+            <!-- Character Display -->
+            <div id="character-display" class="text-center mb-12">
+                <h1 id="character" class="text-8xl font-light mb-4"></h1>
+                <span id="item-type" class="px-3 py-1 rounded-full text-sm font-medium"></span>
+            </div>
+
+            <!-- Input Fields -->
+            <div id="input-container" class="space-y-4">
+                <!-- Dynamically generated inputs will go here -->
+            </div>
+
+            <!-- Feedback -->
+            <div id="feedback" class="mt-8 hidden">
+                <div id="feedback-content" class="p-4 rounded-lg"></div>
+            </div>
+        </div>
+
+        <!-- Completion State -->
+        <div id="completion" class="hidden text-center py-20">
+            <h2 class="text-3xl font-light mb-4">Test Complete!</h2>
+            <p class="text-gray-600 dark:text-gray-400 mb-6">Great job on completing the test.</p>
+            <button onclick="location.reload()" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+                Start New Test
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+class KnowledgeTest {
+    constructor() {
+        this.items = [];
+        this.currentIndex = 0;
+        this.inputs = [];
+        this.currentItem = null;
+        this.currentContinueAction = null;
+    }
+
+    async init() {
+        try {
+            const response = await fetch('/api/test-data');
+            const data = await response.json();
+            this.items = data.items;
+            this.updateProgress();
+            this.showCurrentItem();
+        } catch (error) {
+            console.error('Error loading test data:', error);
+            document.getElementById('loading').innerHTML = `
+                <p class="text-red-600 dark:text-red-400">Error loading test data. Please try again.</p>
+            `;
+        }
+    }
+
+    showCurrentItem() {
+        if (this.currentIndex >= this.items.length) {
+            this.showCompletion();
+            return;
+        }
+
+        this.currentItem = this.items[this.currentIndex];
+        this.inputs = [];
+
+        // Hide loading, show test item
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('test-item').classList.remove('hidden');
+        document.getElementById('completion').classList.add('hidden');
+        
+        // Clean up any existing global listener
+        if (this.globalContinueHandler) {
+            document.removeEventListener('keydown', this.globalContinueHandler);
+        }
+
+        // Update character display
+        const characterEl = document.getElementById('character');
+        const typeEl = document.getElementById('item-type');
+        characterEl.textContent = this.currentItem.character;
+        
+        // Set type styling
+        typeEl.textContent = this.currentItem.type;
+        typeEl.className = 'px-3 py-1 rounded-full text-sm font-medium ';
+        switch (this.currentItem.type) {
+            case 'radical':
+                typeEl.className += 'radical-highlight';
+                break;
+            case 'kanji':
+                typeEl.className += 'kanji-highlight';
+                break;
+            case 'vocabulary':
+                typeEl.className += 'vocabulary-highlight';
+                break;
+        }
+
+        // Generate input fields
+        this.generateInputFields();
+
+        // Focus first input
+        if (this.inputs.length > 0) {
+            this.inputs[0].focus();
+        }
+    }
+
+    generateInputFields() {
+        const container = document.getElementById('input-container');
+        container.innerHTML = '';
+        this.inputs = [];
+
+        this.currentItem.prompts.forEach((prompt, index) => {
+            const inputGroup = document.createElement('div');
+            inputGroup.className = 'flex flex-col space-y-2';
+            
+            const label = document.createElement('label');
+            label.className = 'text-sm font-medium text-gray-700 dark:text-gray-300';
+            label.textContent = this.getPromptLabel(prompt.type);
+            
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'w-full px-4 py-3 text-lg border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white transition-colors';
+            input.placeholder = this.getPlaceholder(prompt.type);
+            input.dataset.promptType = prompt.type;
+            input.dataset.answer = JSON.stringify(prompt.answer);
+            input.dataset.index = index;
+            
+            // Add event listeners
+            input.addEventListener('keydown', (e) => this.handleKeyDown(e, input));
+            if (prompt.type === 'reading') {
+                // Use WanaKana for automatic romaji to hiragana conversion
+                if (typeof wanakana !== 'undefined') {
+                    wanakana.bind(input, { IMEMode: true });
+                } else {
+                    console.error('WanaKana library not loaded');
+                }
+            }
+            
+            inputGroup.appendChild(label);
+            inputGroup.appendChild(input);
+            container.appendChild(inputGroup);
+            
+            this.inputs.push(input);
+        });
+    }
+
+    getPromptLabel(type) {
+        switch (type) {
+            case 'meaning': return 'Meaning';
+            case 'reading': return 'Reading';
+            default: return 'Answer';
+        }
+    }
+
+    getPlaceholder(type) {
+        switch (type) {
+            case 'meaning': return 'Enter meaning in English';
+            case 'reading': return 'Enter reading in hiragana';
+            default: return 'Enter answer';
+        }
+    }
+
+    handleKeyDown(e, input) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+
+            // If we're in failure state (continue action exists), trigger it
+            if (this.currentContinueAction) {
+                this.currentContinueAction();
+                return;
+            }
+
+            // Don't allow Enter on empty fields
+            if (!input.value.trim()) {
+                return;
+            }
+
+            const inputIndex = parseInt(input.dataset.index);
+
+            if (inputIndex < this.inputs.length - 1) {
+                // Move to next input
+                this.inputs[inputIndex + 1].focus();
+            } else {
+                // Check answers
+                this.checkAnswers();
+            }
+        }
+    }
+
+    checkAnswers() {
+        let allCorrect = true;
+        const feedback = document.getElementById('feedback');
+        const feedbackContent = document.getElementById('feedback-content');
+        
+        feedback.classList.remove('hidden');
+        feedbackContent.innerHTML = '';
+        
+        this.inputs.forEach(input => {
+            const inputIndex = parseInt(input.dataset.index);
+            let userAnswer = input.value.trim().toLowerCase();
+            const correctAnswer = JSON.parse(input.dataset.answer);
+            const promptType = input.dataset.promptType;
+
+            // Convert to hiragana for reading inputs
+            if (promptType === 'reading') {
+                userAnswer = this.toHiragana(userAnswer);
+            }
+
+            let isCorrect = false;
+
+            if (Array.isArray(correctAnswer)) {
+                // For kanji readings, any reading is correct
+                isCorrect = correctAnswer.some(answer =>
+                    answer.toLowerCase() === userAnswer
+                );
+            } else {
+                // For meanings and vocab readings
+                isCorrect = userAnswer === correctAnswer.toLowerCase();
+            }
+
+            // Update input styling
+            if (isCorrect) {
+                input.classList.remove('border-red-500', 'focus:ring-red-500');
+                input.classList.add('border-green-500', 'focus:ring-green-500', 'bg-green-50', 'dark:bg-green-900/20');
+            } else {
+                input.classList.remove('border-green-500', 'focus:ring-green-500');
+                input.classList.add('border-red-500', 'focus:ring-red-500', 'bg-red-50', 'dark:bg-red-900/20');
+                allCorrect = false;
+            }
+
+            // Clear previous individual feedback
+            const existingFeedback = input.parentElement.querySelector('.input-feedback');
+            if (existingFeedback) {
+                existingFeedback.remove();
+            }
+
+            // Add initial feedback below each input (mnemonics will be added later)
+            const feedbackItem = document.createElement('div');
+            feedbackItem.className = 'input-feedback mt-1 text-sm';
+            if (isCorrect) {
+                feedbackItem.innerHTML = `<span class="text-green-600 dark:text-green-400">✓ Correct</span>`;
+            } else {
+                let correctText = correctAnswer;
+                if (Array.isArray(correctAnswer)) {
+                    if (correctAnswer.length === 1) {
+                        correctText = correctAnswer[0];
+                    } else {
+                        correctText = correctAnswer.slice(0, -1).join(', ') + ' or ' + correctAnswer[correctAnswer.length - 1];
+                    }
+                }
+                feedbackItem.innerHTML = `<span class="text-red-600 dark:text-red-400">✗ Answer: ${correctText}</span>`;
+            }
+            input.parentElement.appendChild(feedbackItem);
+        });
+        
+        // Move to next item immediately if all answers are correct
+        if (allCorrect) {
+            this.currentIndex++;
+            this.updateProgress();
+            feedback.classList.add('hidden');
+            this.showCurrentItem();
+        } else {
+            // On failure: show additional info and continue button
+            this.showFailureFeedback();
+        }
+    }
+
+    showFailureFeedback() {
+        // On failure, disable inputs and show additional info
+        this.inputs.forEach(input => {
+            input.disabled = true;
+        });
+
+        // Add continue button (minimalist style)
+        const continueBtn = document.createElement('button');
+        continueBtn.className = 'mt-4 w-full px-4 py-2 text-gray-600 dark:text-gray-400 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500';
+        continueBtn.textContent = 'Press Enter to continue';
+
+        // Continue action - move failed item to end and show next item
+        const continueAction = () => {
+            // Move current item to end of queue for retry
+            const failedItem = this.items.splice(this.currentIndex, 1)[0];
+            this.items.push(failedItem);
+            // Don't increment currentIndex, so progress stays the same
+            // This means the next item in sequence will be shown
+
+            this.updateProgress();
+            feedback.classList.add('hidden');
+            infoContainer.remove();
+            continueBtn.remove();
+            this.currentContinueAction = null; // Clear after use
+            this.showCurrentItem();
+        };
+
+        // Set continue action for button click only (Enter will be set up after info loads)
+        continueBtn.onclick = continueAction;
+        this.currentContinueAction = continueAction;
+
+        // Add additional info container
+        const infoContainer = document.createElement('div');
+        infoContainer.className = 'mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg';
+
+        // Add detail link
+        const detailLink = document.createElement('a');
+        detailLink.href = `/${this.currentItem.type}s/${this.currentItem.id.split('_')[1]}`;
+        detailLink.className = 'inline-block mb-3 text-blue-600 dark:text-blue-400 hover:underline';
+        detailLink.textContent = `View ${this.currentItem.type} details →`;
+        detailLink.target = '_blank';
+
+        infoContainer.appendChild(detailLink);
+
+        // Fetch and display additional information
+        this.fetchAdditionalInfo().then(info => {
+            // Store additional info for per-input display
+            this.additionalInfo = info;
+
+            // Update feedback to include mnemonics
+            this.inputs.forEach((input, index) => {
+                const existingFeedback = input.parentElement.querySelector('.input-feedback');
+                if (existingFeedback) {
+                    const inputIndex = parseInt(input.dataset.index);
+                    let userAnswer = input.value.trim().toLowerCase();
+                    const correctAnswer = JSON.parse(input.dataset.answer);
+                    const promptType = input.dataset.promptType;
+
+                    // Convert to hiragana for reading inputs
+                    if (promptType === 'reading') {
+                        userAnswer = this.toHiragana(userAnswer);
+                    }
+
+                    let isCorrect = false;
+
+                    if (Array.isArray(correctAnswer)) {
+                        // For kanji readings, any reading is correct
+                        isCorrect = correctAnswer.some(answer =>
+                            answer.toLowerCase() === userAnswer
+                        );
+                    } else {
+                        // For meanings and vocab readings
+                        isCorrect = userAnswer === correctAnswer.toLowerCase();
+                    }
+
+                    // Only update incorrect answers to include mnemonics
+                    if (!isCorrect && this.additionalInfo && this.additionalInfo[promptType]) {
+                        const mnemonicDiv = document.createElement('div');
+                        mnemonicDiv.className = 'mt-2 p-2 bg-gray-50 dark:bg-gray-800 rounded text-xs text-gray-600 dark:text-gray-400';
+                        mnemonicDiv.innerHTML = this.additionalInfo[promptType];
+                        existingFeedback.appendChild(mnemonicDiv);
+                    }
+                }
+            });
+
+            // Only set up continue listener after additional info is loaded
+            this.setupContinueListener();
+        }).catch(error => {
+            console.error('Error fetching additional info:', error);
+            // Still set up continue listener even if info fetch fails
+            this.setupContinueListener();
+        });
+
+        document.getElementById('input-container').appendChild(continueBtn);
+        document.getElementById('input-container').appendChild(infoContainer);
+    }
+
+    toHiragana(text) {
+        // Use WanaKana for proper conversion
+        if (typeof wanakana !== 'undefined') {
+            return wanakana.toHiragana(text);
+        }
+        return text; // fallback
+    }
+
+    setupContinueListener() {
+        // Add global listener that catches Enter when in failure state
+        this.globalContinueHandler = (e) => {
+            if (e.key === 'Enter' && this.currentContinueAction) {
+                e.preventDefault();
+                this.currentContinueAction();
+            }
+        };
+        document.addEventListener('keydown', this.globalContinueHandler);
+    }
+
+    async fetchAdditionalInfo() {
+        try {
+            const response = await fetch(`/api/additional-info/${this.currentItem.type}/${this.currentItem.id.split('_')[1]}`);
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Error fetching additional info:', error);
+            return null;
+        }
+    }
+
+    updateProgress() {
+        const progress = (this.currentIndex / this.items.length) * 100;
+        document.getElementById('progress-bar').style.width = `${progress}%`;
+        document.getElementById('progress-text').textContent = `${this.currentIndex} / ${this.items.length}`;
+    }
+
+    showCompletion() {
+        document.getElementById('test-item').classList.add('hidden');
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('completion').classList.remove('hidden');
+        this.updateProgress();
+    }
+}
+
+// Initialize the test when page loads
+window.addEventListener('load', () => {
+    if (typeof wanakana !== 'undefined') {
+        new KnowledgeTest().init();
+    } else {
+        console.error('WanaKana library failed to load');
+    }
+});
+</script>
+{% endblock %}
