@@ -437,6 +437,7 @@ def get_test_data():
                 "type": "radical",
                 "character": radical["character"] or radical["character_image"],
                 "prompts": [{"type": "meaning", "answer": radical["meaning"]}],
+                "mode": "review",
             }
         )
 
@@ -452,6 +453,7 @@ def get_test_data():
                     {"type": "meaning", "answer": k["meaning"]},
                     {"type": "reading", "answer": readings_list},
                 ],
+                "mode": "review",
             }
         )
 
@@ -471,6 +473,57 @@ def get_test_data():
                     {"type": "meaning", "answer": all_meanings},
                     {"type": "reading", "answer": v["reading"]},
                 ],
+                "mode": "review",
+            }
+        )
+
+    # Add example learn items
+    # Learn radicals
+    for i in range(2):
+        radical = radicals[i]
+        test_items.append(
+            {
+                "id": f"learn_radical_{radical['id']}",
+                "type": "radical",
+                "character": radical["character"] or radical["character_image"],
+                "prompts": [{"type": "meaning", "answer": radical["meaning"]}],
+                "mode": "learn",
+            }
+        )
+
+    # Learn kanji
+    for i in range(2):
+        k = kanji[i]
+        readings_list = [r.strip() for r in k["readings"].split(",") if r.strip()]
+        test_items.append(
+            {
+                "id": f"learn_kanji_{k['id']}",
+                "type": "kanji",
+                "character": k["character"],
+                "prompts": [
+                    {"type": "meaning", "answer": k["meaning"]},
+                    {"type": "reading", "answer": readings_list},
+                ],
+                "mode": "learn",
+            }
+        )
+
+    # Learn vocabulary
+    for i in range(2):
+        v = vocabulary[i]
+        all_meanings = [v["primary_meaning"]]
+        if v["alternative_meanings"]:
+            all_meanings.extend([alt for alt in v["alternative_meanings"] if alt])
+        test_items.append(
+            {
+                "id": f"learn_vocab_{v['id']}",
+                "type": "vocabulary",
+                "character": v["character"],
+                "prompts": [
+                    {"type": "meaning", "answer": all_meanings},
+                    {"type": "reading", "answer": v["reading"]},
+                ],
+                "mode": "learn",
             }
         )
 

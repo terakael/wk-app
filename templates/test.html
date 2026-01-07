@@ -60,8 +60,11 @@
 <script>
 class KnowledgeTest {
     constructor() {
-        this.items = [];
-        this.currentIndex = 0;
+        this.reviewQueue = [];
+        this.learnQueue = [];
+        this.currentQueue = null;
+        this.processed = 0;
+        this.totalItems = 0;
         this.inputs = [];
         this.currentItem = null;
         this.currentContinueAction = null;
@@ -71,7 +74,15 @@ class KnowledgeTest {
         try {
             const response = await fetch('/api/test-data');
             const data = await response.json();
-            this.items = data.items;
+            data.items.forEach(item => {
+                if (item.mode === 'review') {
+                    this.reviewQueue.push(item);
+                } else if (item.mode === 'learn') {
+                    this.learnQueue.push(item);
+                }
+            });
+            this.totalItems = data.items.length;
+            this.currentQueue = this.reviewQueue;
             this.updateProgress();
             this.showCurrentItem();
         } catch (error) {
@@ -82,19 +93,35 @@ class KnowledgeTest {
         }
     }
 
+
+
     showCurrentItem() {
-        if (this.currentIndex >= this.items.length) {
-            this.showCompletion();
-            return;
+        this.currentItem = this.currentQueue.shift();
+        if (!this.currentItem) {
+            if (this.learnQueue.length > 0) {
+                this.currentQueue = this.learnQueue;
+                this.showCurrentItem();
+                return;
+            } else if (this.reviewQueue.length > 0) {
+                this.currentQueue = this.reviewQueue;
+                this.showCurrentItem();
+                return;
+            } else {
+                this.showCompletion();
+                return;
+            }
         }
 
-        this.currentItem = this.items[this.currentIndex];
         this.inputs = [];
 
         // Hide loading, show test item
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('test-item').classList.remove('hidden');
         document.getElementById('completion').classList.add('hidden');
+
+        // Clear previous feedback
+        document.getElementById('feedback-content').innerHTML = '';
+        document.getElementById('feedback').classList.add('hidden');
         
         // Clean up any existing global listener
         if (this.globalContinueHandler) {
@@ -121,6 +148,15 @@ class KnowledgeTest {
                 break;
         }
 
+        if (this.currentItem.mode === 'learn') {
+            this.showLearnItem();
+        } else {
+            this.showReviewItem();
+        }
+    }
+
+    showReviewItem() {
+        document.getElementById('input-container').style.display = 'block';
         // Generate input fields
         this.generateInputFields();
 
@@ -128,6 +164,99 @@ class KnowledgeTest {
         if (this.inputs.length > 0) {
             this.inputs[0].focus();
         }
+    }
+
+    showLearnItem() {
+        document.getElementById('input-container').style.display = 'none';
+        // For learn, show answers directly and fetch mnemonics
+        this.displayAnswersForLearn();
+    }
+
+    displayAnswersForLearn() {
+        const feedback = document.getElementById('feedback');
+        const feedbackContent = document.getElementById('feedback-content');
+
+        feedback.classList.remove('hidden');
+        feedbackContent.innerHTML = '';
+
+        const mnemonicDivs = [];
+
+        // Show answers for each prompt
+        this.currentItem.prompts.forEach((prompt, index) => {
+            const answerDiv = document.createElement('div');
+            answerDiv.className = 'mb-2 text-gray-700 dark:text-gray-300';
+            let correctText = prompt.answer;
+            if (Array.isArray(prompt.answer)) {
+                if (prompt.answer.length === 1) {
+                    correctText = prompt.answer[0];
+                } else {
+                    correctText = prompt.answer.slice(0, -1).join(', ') + ' or ' + prompt.answer[prompt.answer.length - 1];
+                }
+            }
+            answerDiv.innerHTML = `<strong>${this.getPromptLabel(prompt.type)}:</strong> ${correctText}`;
+            feedbackContent.appendChild(answerDiv);
+
+            const mnemonicDiv = document.createElement('div');
+            mnemonicDiv.className = 'mt-2 p-2 bg-gray-50 dark:bg-gray-800 rounded text-xs text-gray-600 dark:text-gray-400';
+            feedbackContent.appendChild(mnemonicDiv);
+            mnemonicDivs.push(mnemonicDiv);
+        });
+
+        // Add continue button
+        const continueBtn = document.createElement('button');
+        continueBtn.className = 'mt-4 w-full px-4 py-2 text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-900/20 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500';
+        continueBtn.textContent = 'Press Enter to continue';
+
+        const continueAction = () => {
+            // Append to reviewQueue as review
+            const reviewItem = { ...this.currentItem };
+            reviewItem.mode = 'review';
+            this.reviewQueue.push(reviewItem);
+
+            this.processed++;
+            this.updateProgress();
+            feedback.classList.add('hidden');
+            continueBtn.remove();
+            infoContainer.remove();
+            this.currentContinueAction = null;
+            this.showCurrentItem();
+        };
+
+        continueBtn.onclick = continueAction;
+        this.currentContinueAction = continueAction;
+
+        // Add additional info container
+        const infoContainer = document.createElement('div');
+        infoContainer.className = 'mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg';
+
+        // Add detail link
+        const detailLink = document.createElement('a');
+        detailLink.href = `/${this.currentItem.type}s/${this.currentItem.id.split('_').pop()}`;
+        detailLink.className = 'inline-block mb-3 text-blue-600 dark:text-blue-400 hover:underline';
+        detailLink.textContent = `View ${this.currentItem.type} details →`;
+        detailLink.target = '_blank';
+        infoContainer.appendChild(detailLink);
+
+        // Fetch and display mnemonics
+        this.fetchAdditionalInfo().then(info => {
+            this.additionalInfo = info;
+            mnemonicDivs.forEach((div, index) => {
+                const prompt = this.currentItem.prompts[index];
+                if (this.additionalInfo && this.additionalInfo[prompt.type]) {
+                    div.innerHTML = this.additionalInfo[prompt.type];
+                } else {
+                    div.style.display = 'none';
+                }
+            });
+            this.setupContinueListener();
+        }).catch(error => {
+            console.error('Error fetching additional info:', error);
+            mnemonicDivs.forEach(div => div.style.display = 'none');
+            this.setupContinueListener();
+        });
+
+        document.getElementById('input-container').appendChild(continueBtn);
+        document.getElementById('input-container').appendChild(infoContainer);
     }
 
     generateInputFields() {
@@ -244,6 +373,8 @@ class KnowledgeTest {
                 isCorrect = userAnswer === correctAnswer.toLowerCase();
             }
 
+            console.log(`Input ${inputIndex} (${promptType}): user "${userAnswer}" correct ${JSON.stringify(correctAnswer)} isCorrect ${isCorrect}`);
+
             // Update input styling
             if (isCorrect) {
                 input.classList.remove('border-red-500', 'focus:ring-red-500');
@@ -281,7 +412,7 @@ class KnowledgeTest {
         
         // Move to next item immediately if all answers are correct
         if (allCorrect) {
-            this.currentIndex++;
+            this.processed++;
             this.updateProgress();
             feedback.classList.add('hidden');
             this.showCurrentItem();
@@ -302,13 +433,10 @@ class KnowledgeTest {
         continueBtn.className = 'mt-4 w-full px-4 py-2 text-gray-600 dark:text-gray-400 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500';
         continueBtn.textContent = 'Press Enter to continue';
 
-        // Continue action - move failed item to end and show next item
+        // Continue action - move failed item to end of currentQueue
         const continueAction = () => {
-            // Move current item to end of queue for retry
-            const failedItem = this.items.splice(this.currentIndex, 1)[0];
-            this.items.push(failedItem);
-            // Don't increment currentIndex, so progress stays the same
-            // This means the next item in sequence will be shown
+            // Requeue to end of currentQueue
+            this.currentQueue.push(this.currentItem);
 
             this.updateProgress();
             feedback.classList.add('hidden');
@@ -409,7 +537,9 @@ class KnowledgeTest {
 
     async fetchAdditionalInfo() {
         try {
-            const response = await fetch(`/api/additional-info/${this.currentItem.type}/${this.currentItem.id.split('_')[1]}`);
+            const itemId = this.currentItem.id.split('_').pop();
+            const itemType = this.currentItem.type;
+            const response = await fetch(`/api/additional-info/${itemType}/${itemId}`);
             const data = await response.json();
             return data;
         } catch (error) {
@@ -419,9 +549,9 @@ class KnowledgeTest {
     }
 
     updateProgress() {
-        const progress = (this.currentIndex / this.items.length) * 100;
+        const progress = (this.processed / this.totalItems) * 100;
         document.getElementById('progress-bar').style.width = `${progress}%`;
-        document.getElementById('progress-text').textContent = `${this.currentIndex} / ${this.items.length}`;
+        document.getElementById('progress-text').textContent = `${this.processed} / ${this.totalItems}`;
     }
 
     showCompletion() {
